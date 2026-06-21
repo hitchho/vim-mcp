@@ -23,3 +23,9 @@ augroup vim_mcp
   autocmd VimLeavePre * call vim_mcp#Disconnect()
   autocmd BufEnter,BufWrite,WinEnter * call vim_mcp#SendStateUpdate()
 augroup END
+
+" If the plugin loads AFTER VimEnter already fired (e.g. lazy.nvim, lazy=false),
+" the autocmd above never runs — connect now instead.
+if v:vim_did_enter
+  call vim_mcp#Connect()
+endif
