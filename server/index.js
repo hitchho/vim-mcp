@@ -135,6 +135,38 @@ class VimMCPServer {
     });
   }
 
+  // Generic request/response over the Vim socket (matches by id, with timeout).
+  async sendVimRequest(instanceId, method, params = {}, timeoutMs = 3000) {
+    const conn = this.vimConnections.get(instanceId);
+    if (!conn || !conn.socket || conn.socket.destroyed) {
+      throw new Error(`Instance ${instanceId} not connected`);
+    }
+    return new Promise((resolve, reject) => {
+      const requestId = Date.now() + Math.floor(Math.random() * 1000);
+      const payload = JSON.stringify({ id: requestId, method, params }) + '\n';
+      const responseHandler = (data) => {
+        try {
+          for (const line of data.toString().split('\n')) {
+            if (!line.trim()) continue;
+            const response = JSON.parse(line);
+            if (response.id === requestId) {
+              conn.socket.removeListener('data', responseHandler);
+              if (response.error) reject(new Error(response.error.message));
+              else resolve(response.result);
+              return;
+            }
+          }
+        } catch (e) { /* ignore partial / interleaved frames */ }
+      };
+      conn.socket.on('data', responseHandler);
+      conn.socket.write(payload);
+      setTimeout(() => {
+        conn.socket.removeListener('data', responseHandler);
+        reject(new Error(`Timeout waiting for Vim response to ${method}`));
+      }, timeoutMs);
+    });
+  }
+
   async executeVimCommand(instanceId, command) {
     const conn = this.vimConnections.get(instanceId);
     if (!conn || !conn.socket || conn.socket.destroyed) {
@@ -939,6 +971,47 @@ class VimMCPServer {
         }
       }
 
+      // --- live-editor tools (added) ---
+      const a = args || {};
+      const requireInstance = () => {
+        if (!this.selectedInstance) {
+          throw new Error('No Vim instance selected. Use select_vim_instance tool first.');
+        }
+        return this.selectedInstance;
+      };
+      const asText = (result) => ({
+        content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }]
+      });
+
+      if (name === 'get_buffer_content') {
+        const result = await this.sendVimRequest(requireInstance(), 'get_buffer_content', {
+          bufnr: a.bufnr || 0,
+          start: a.start,
+          end: a.end,
+          line_numbers: a.line_numbers !== false
+        });
+        return asText(result);
+      }
+
+      if (name === 'get_selection') {
+        const result = await this.sendVimRequest(requireInstance(), 'get_selection', {});
+        return asText(result);
+      }
+
+      if (name === 'lsp_action') {
+        if (!a.action) throw new Error('action is required (diagnostics|definition|references|implementation|type_definition|hover|rename|code_action)');
+        const result = await this.sendVimRequest(requireInstance(), 'lsp_action',
+          { action: a.action, new_name: a.new_name }, 5000);
+        return asText(result);
+      }
+
+      if (name === 'notify') {
+        if (!a.message) throw new Error('message is required');
+        const result = await this.sendVimRequest(requireInstance(), 'notify',
+          { message: a.message, level: a.level || 'info' });
+        return asText(result);
+      }
+
       throw new Error(`Unknown tool: ${name}`);
     });
 
@@ -946,6 +1019,48 @@ class VimMCPServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
         tools: [
+          {
+            name: 'get_buffer_content',
+            description: 'Read the LIVE content of a Vim buffer (includes unsaved edits). Prefer this over reading the file from disk when you need what the user currently sees.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                bufnr: { type: 'number', description: 'Buffer number; omit or 0 for the current buffer' },
+                start: { type: 'number', description: 'First line, 1-based inclusive (default 1)' },
+                end: { type: 'number', description: 'Last line, 1-based inclusive (default last line)' },
+                line_numbers: { type: 'boolean', description: 'Prefix each line with its number (default true)' }
+              }
+            }
+          },
+          {
+            name: 'get_selection',
+            description: 'Get the current visual selection (text + line range) plus the word/WORD under the cursor. Use for "explain/refactor this".',
+            inputSchema: { type: 'object', properties: {} }
+          },
+          {
+            name: 'lsp_action',
+            description: 'Run a Neovim LSP action on the current buffer/cursor. actions: diagnostics, definition, references, implementation, type_definition, hover, rename (requires new_name), code_action (lists available titles).',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                action: { type: 'string', enum: ['diagnostics','definition','references','implementation','type_definition','hover','rename','code_action'], description: 'Which LSP action to run' },
+                new_name: { type: 'string', description: 'New symbol name (only for action=rename), applied to the symbol under the cursor' }
+              },
+              required: ['action']
+            }
+          },
+          {
+            name: 'notify',
+            description: 'Show a message in Vim (statusline + vim.notify). Use for HUD feedback or to confirm an action before mutating.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', description: 'Text to display' },
+                level: { type: 'string', enum: ['info','warn','error','success'], description: 'Severity (default info)' }
+              },
+              required: ['message']
+            }
+          },
           {
             name: 'list_vim_instances',
             description: 'List all available Vim instances',

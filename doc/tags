@@ -1,0 +1,12 @@
+:VimMCPConnect	vim-mcp.txt	/*:VimMCPConnect*
+:VimMCPDisconnect	vim-mcp.txt	/*:VimMCPDisconnect*
+:VimMCPReconnect	vim-mcp.txt	/*:VimMCPReconnect*
+:VimMCPStatus	vim-mcp.txt	/*:VimMCPStatus*
+vim-mcp-claude-tools	vim-mcp.txt	/*vim-mcp-claude-tools*
+vim-mcp-commands	vim-mcp.txt	/*vim-mcp-commands*
+vim-mcp-configuration	vim-mcp.txt	/*vim-mcp-configuration*
+vim-mcp-contents	vim-mcp.txt	/*vim-mcp-contents*
+vim-mcp-installation	vim-mcp.txt	/*vim-mcp-installation*
+vim-mcp-introduction	vim-mcp.txt	/*vim-mcp-introduction*
+vim-mcp-troubleshooting	vim-mcp.txt	/*vim-mcp-troubleshooting*
+vim-mcp.txt	vim-mcp.txt	/*vim-mcp.txt*

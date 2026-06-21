@@ -39,6 +39,14 @@ function! s:HandleMessage(channel, msg)
         let l:execute = get(l:message.params, 'execute', 1)
         let l:response.result = vim_mcp#macro#RecordMacro(l:message.params.macro_sequence, l:register, l:execute)
         call vim_mcp#utils#DebugLog('Macro recording completed, sending response')
+      elseif l:message.method == 'get_buffer_content'
+        let l:response.result = vim_mcp#buffer#GetContent(get(l:message, 'params', {}))
+      elseif l:message.method == 'get_selection'
+        let l:response.result = vim_mcp#selection#Get()
+      elseif l:message.method == 'lsp_action'
+        let l:response.result = vim_mcp#lsp#Action(get(l:message, 'params', {}))
+      elseif l:message.method == 'notify'
+        let l:response.result = vim_mcp#notify#Notify(get(l:message, 'params', {}))
       else
         let l:response.error = {
           \ 'code': -32601,
