@@ -60,7 +60,8 @@ endfunction
 " Start connection retry timer
 function! s:StartConnectionTimer()
   if s:connection_timer != v:null
-    return  " Timer already running
+    " Timer already running
+    return
   endif
 
   if has('timers')
